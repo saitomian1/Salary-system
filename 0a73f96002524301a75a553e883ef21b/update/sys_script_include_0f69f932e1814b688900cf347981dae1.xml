@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<record_update table="sys_script_include">
+  <sys_script_include action="INSERT_OR_UPDATE">
+    <access/>
+    <active>true</active>
+    <api_name>CheckNetSalary</api_name>
+    <caller_access/>
+    <client_callable>false</client_callable>
+    <description>薪资校验</description>
+    <name>CheckNetSalary</name>
+    <script>var CheckNetSalary = Class.create();
+CheckNetSalary.prototype = {
+    initialize: function () {
+    },
+    check: function (monthly_list, nowMonthId) {
+        var monthly = new GlideRecord('x_yunji_jet_04_monthly_list');
+        var mpy = new GlideRecord('x_yunji_jet_04_monthly_payroll_summary');
+
+        var date = '';
+        monthly.addQuery('sys_id', '=', monthly_list);
+        monthly.query();
+        if (monthly.hasNext()) {
+            monthly.next();
+            date = monthly.getValue('month');
+        }
+        //获取上月月份
+        var arr = date.split('-');
+        var year = arr[0]; //获取当前日期的年份
+        var month = arr[1]; //获取当前日期的月份
+        var year2 = year;
+        var month2 = parseInt(month) - 1;
+        if (month2 == 0) {
+            year2 = parseInt(year2) - 1;
+            month2 = 12;
+        }
+        var lastMonth = year2 + '-' + month2;
+        monthly.addQuery('month', '=', lastMonth);
+        monthly.query();
+        var lastMonthId;
+        if (monthly.hasNext()) {
+            monthly.next();
+            lastMonthId = monthly.getValue('sys_id');
+        }
+        mpy.addQuery('month_list', '=', lastMonthId);
+        mpy.query();
+        var last_monthly_id;
+        if (mpy.hasNext()) {
+            mpy.next();
+            last_monthly_id = mpy.getValue('sys_id');
+        }
+
+        var pm = new GlideRecord('x_yunji_jet_04_personal_monthly_payroll');
+        pm.addQuery('monthly_payroll_summary', '=', nowMonthId);
+        pm.query();
+        while (pm.hasNext()) {
+            pm.next();
+            var pm2 = new GlideRecord('x_yunji_jet_04_personal_monthly_payroll');
+            pm2.addQuery('employee', '=', pm.getValue('employee'));
+            pm2.addQuery('monthly_payroll_summary', '=', last_monthly_id);
+            pm2.query();
+            if (pm2.hasNext()) {
+                pm2.next();
+                pm.setValue('last_net_salary', this.parseNum(pm2.getValue('net_salary')));
+                pm.setValue('diff_net_salary', (this.parseNum(pm.getValue('net_salary')) - this.parseNum(pm2.getValue('net_salary'))).toFixed(2));
+                pm.update();
+            }
+        }
+    },
+
+    parseNum: function (num) {
+        if (num == null || num == 0) {
+            return 0;
+        }
+        return parseFloat(num);
+    },
+
+    type: 'CheckNetSalary'
+};</script>
+    <sys_class_name>sys_script_include</sys_class_name>
+    <sys_created_by>wangrui</sys_created_by>
+    <sys_created_on>2022-04-28 16:31:05</sys_created_on>
+    <sys_effective/>
+    <sys_id>0f69f932e1814b688900cf347981dae1</sys_id>
+    <sys_mod_count>1</sys_mod_count>
+    <sys_name/>
+    <sys_package/>
+    <sys_policy/>
+    <sys_scope>0a73f96002524301a75a553e883ef21b</sys_scope>
+    <sys_update_name/>
+    <sys_updated_by>wangrui</sys_updated_by>
+    <sys_updated_on>2022-05-05 08:22:09</sys_updated_on>
+  </sys_script_include>
+</record_update>
