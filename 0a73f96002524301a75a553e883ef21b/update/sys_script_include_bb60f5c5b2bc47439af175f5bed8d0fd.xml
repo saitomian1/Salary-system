@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<record_update table="sys_script_include">
+  <sys_script_include action="INSERT_OR_UPDATE">
+    <access/>
+    <active>true</active>
+    <api_name>SalaryService</api_name>
+    <caller_access/>
+    <client_callable>true</client_callable>
+    <description>薪资系统_薪资服务</description>
+    <name>SalaryService</name>
+    <script>var SalaryService = Class.create();
+SalaryService.prototype = {
+  initialize: function(){
+  },
+  saveSalary: function(data){
+    var result={"isSuccess":false};
+    if(data.employeeId){
+      var gr=new GlideRecord("x_yunji_jet_04_base_salary");
+      gr.addQuery("employee",data.employeeId);
+      gr.query();
+      var cols=["salary", "social_security", "housing_provident_fund", "meal_allowance", "phone_allowance", "compute_allowance", "other_allowance"];
+      
+      if(gr.next()==null){
+        result.message="未查询到社保信息";
+        gr.setValue("employee",data.employeeId);
+        var updateData=false;
+        for(i=0;i&lt;cols.length;i++){
+          var val=data[cols[i]];
+          if(val!=null&amp;&amp;val&gt;=0){
+              gr.setValue(cols[i],val);
+              updateData=true;
+          }
+        }
+        if(updateData){
+          if(gr.insert()){
+            result.isSuccess=true;
+            result.message="插入成功";
+          }else{
+            result.message="插入失败";
+          }
+        }else{
+          result.message="薪资相关参数不可全部为空";
+        }
+      }else{
+        result.message="查询到社保信息";
+        var updateData=false;
+        for(i=0;i&lt;cols.length;i++){
+          var val=data[cols[i]];
+          if(val!=null&amp;&amp;val&gt;=0){
+              gr.setValue(cols[i],val);
+              updateData=true;
+          }
+        }
+        if(updateData){
+          if(gr.update()){
+            result.isSuccess=true;
+            result.message="更新成功!";
+          }else{
+            result.message="更新失败";
+          }
+        }else{
+          result.message="薪资相关参数不可全部为空";
+        }
+      }
+    }else{
+      result.message="员工参数不可为空";
+    }
+    return result;
+  },
+  adjustmentSalary: function(data){
+    var result={"isSuccess":false};
+      if(!data.employeeId){
+        result.message="员工不可为空";
+      }else if(!data.companyId){
+        result.message="公司不可为空";
+      }else if(!data.employeeId){
+        result.message="生效月份不可为空";
+      }else{
+        var ymonth=new GlideRecord("x_yunji_jet_04_monthly_list");
+        ymonth.addQuery("company",data.companyId);
+        ymonth.addQuery("month",data.effective_month);
+        ymonth.query();
+        if(ymonth.next()==null){
+          result.message="生效月份配置不存在";
+        }else{
+          var monthId=ymonth.getValue("sys_id");
+          var bs=new GlideRecord("x_yunji_jet_04_base_salary");
+          if(bs.get("employee",data.employeeId)){
+            var gr=new GlideRecord("x_yunji_jet_04_adjustment_record");
+            gr.addQuery("employee",data.employeeId);
+            gr.addQuery("monthly_list",monthId);
+            gr.query();
+            var cols=["salary", "social_security", "housing_provident_fund", "meal_allowance", "phone_allowance", "compute_allowance", "other_allowance"];
+            var create=gr.next()==null;
+            var updateData=false;
+            if(create){
+              gr.setValue("employee",data.employeeId);
+              gr.setValue("monthly_list",monthId);
+              for(i=0;i&lt;cols.length;i++){
+                gr.setValue("before_"+cols[i],bs.getValue(cols[i]));
+              }
+            }
+    
+            for(i=0;i&lt;cols.length;i++){
+              var val=data[cols[i]];
+              if(val!=null&amp;&amp;val&gt;=0){
+                gr.setValue(cols[i],val);
+                updateData=true;
+              }
+            }
+    
+            if(updateData){
+              if(create){
+                if(gr.insert()){
+                  result.isSuccess=true;
+                  result.message="插入成功";
+                }else{
+                  result.message="插入失败";
+                }
+              }else{
+                if(gr.update()){
+                  result.isSuccess=true;
+                  result.message="更新成功.";
+                }else{
+                  result.message="更新失败";
+                }
+              }
+            }else{
+              result.message="薪资相关参数不可全部为空";
+            }
+          }else{
+            result.message="员工薪资信息不存在";
+          }
+        }
+      }
+      return result;
+  },
+  type: 'SalaryService'
+};</script>
+    <sys_class_name>sys_script_include</sys_class_name>
+    <sys_created_by>jiaohuizhe</sys_created_by>
+    <sys_created_on>2022-04-28 11:27:23</sys_created_on>
+    <sys_effective/>
+    <sys_id>bb60f5c5b2bc47439af175f5bed8d0fd</sys_id>
+    <sys_mod_count>1</sys_mod_count>
+    <sys_name/>
+    <sys_package/>
+    <sys_policy/>
+    <sys_scope>0a73f96002524301a75a553e883ef21b</sys_scope>
+    <sys_update_name/>
+    <sys_updated_by>jiaohuizhe</sys_updated_by>
+    <sys_updated_on>2022-04-29 08:17:17</sys_updated_on>
+  </sys_script_include>
+</record_update>

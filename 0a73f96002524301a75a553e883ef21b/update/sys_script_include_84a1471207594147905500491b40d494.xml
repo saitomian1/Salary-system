@@ -1,0 +1,283 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<record_update table="sys_script_include">
+  <sys_script_include action="INSERT_OR_UPDATE">
+    <access/>
+    <active>true</active>
+    <api_name>AttendanceAmountCalculation</api_name>
+    <caller_access/>
+    <client_callable>false</client_callable>
+    <description>薪资系统_考勤金额计算</description>
+    <name>AttendanceAmountCalculation</name>
+    <script>var AttendanceAmountCalculation = Class.create();
+AttendanceAmountCalculation.prototype = {
+    initialize: function () {
+    },
+    calculate: function (sys_id) {
+        // 公司月度工资单
+        var summary = new GlideRecord('x_yunji_jet_04_monthly_payroll_summary');
+        summary.addQuery('sys_id', sys_id);
+        summary.query();
+        // 计薪天数
+        var workdays = 0;
+        // 公司月份清单
+        var monthly_list = 0;
+
+        if (summary.next() != null) {
+            workdays = summary.getValue('workdays');
+            monthly_list = summary.getValue('monthly_list');
+
+            // 个人月工资表，如果已有先删除
+            var payroll = new GlideRecord('x_yunji_jet_04_personal_monthly_payroll');
+            payroll.addQuery('monthly_payroll_summary', sys_id);
+            payroll.query();
+            if (payroll.hasNext()) {
+                payroll.addQuery('monthly_payroll_summary', '=', sys_id);
+                payroll.deleteMultiple();
+            }
+
+            var employeeNum = 0;
+            // 按照月份考勤记录增加个人月工资单
+            var attendance = new GlideRecord('x_yunji_jet_04_attendance_record');
+            attendance.addQuery('monthly_list', monthly_list);
+            attendance.query();
+            while (attendance.hasNext()) {
+                attendance.next();
+                employeeNum = employeeNum + 1;
+                var employee = attendance.getValue('employee');
+                this.updateBaseSalary(monthly_list,employee);
+                // 基本工资
+                var bs = new GlideRecord('x_yunji_jet_04_base_salary');
+                bs.addQuery('employee', employee);
+                bs.query();
+                // 基本工资
+                var salary = 0;
+                // 餐补
+                var mealAllowance = 0;
+                // 通讯补助
+                var phoneAllowance = 0;
+                // 电脑补助
+                var computeAllowance = 0;
+                // 其它补助
+                var otherAllowance = 0;
+                if (bs.next()) {
+                    salary = bs.getValue('salary');
+                    if (bs.getValue('meal_allowance') != null) {
+                        mealAllowance = bs.getValue('meal_allowance');
+                    }
+                    if (bs.getValue('phone_allowance') != null) {
+                        phoneAllowance = bs.getValue('phone_allowance');
+                    }
+                    if (bs.getValue('compute_allowance') != null) {
+                        computeAllowance = bs.getValue('compute_allowance');
+                    }
+                    if (bs.getValue('other_allowance') != null) {
+                        otherAllowance = bs.getValue('other_allowance');
+                    }
+                }
+                payroll.setValue('salary', salary);
+
+                var bonus = this.parseFixed(parseFloat(mealAllowance) + parseFloat(computeAllowance) + parseFloat(otherAllowance));
+                var bonus_desc = '餐补：' + mealAllowance + '，' + '电脑补助：' + computeAllowance + '，' + '其它补助：' + otherAllowance;
+
+                var deduction_desc = '';
+                // 事假扣款
+                var personalLeave = this.absenceDebit(salary, workdays, attendance.getValue('personal_leave'));
+                deduction_desc = '事假扣款：' + personalLeave;
+
+                // 普通缺勤扣款
+                var absenteeism = this.absenceDebit(salary, workdays, attendance.getValue('absenteeism_days'));
+                deduction_desc = deduction_desc + '，缺勤扣款：' + absenteeism;
+
+                // 迟到扣款
+                var late = this.lateDebit(attendance.getValue('late'));
+                deduction_desc = deduction_desc + '，迟到扣款：' + late;
+
+                // 病假扣款
+                var sickLeave = this.sickLeaveDebit(salary, workdays, attendance.getValue('sick_leave'));
+                deduction_desc = deduction_desc + '，病假扣款：' + sickLeave;
+
+                // 餐补扣款：(入离职缺勤天数+事假天数+病假天数+缺勤天数)
+                var days = attendance.getValue('personal_leave') + attendance.getValue('absenteeism_days') + attendance.getValue('sick_leave');
+                var meal = this.mealAllowanceDebit(mealAllowance, workdays, days);
+                deduction_desc = deduction_desc + '，餐补扣款：' + meal;
+
+                // 扣费合计
+                var deduction = (parseFloat(personalLeave) + parseFloat(absenteeism) + parseFloat(late) + parseFloat(sickLeave) + parseFloat(meal)).toFixed(2);
+
+                payroll.setValue('phone_allowance', phoneAllowance);
+                payroll.setValue('bonus', bonus);
+                payroll.setValue('bonus_desc', bonus_desc);
+                payroll.setValue('deduction', deduction);
+                payroll.setValue('deduction_desc', deduction_desc);
+                payroll.setValue('employee', employee);
+                payroll.setValue('monthly_payroll_summary', sys_id);
+                payroll.insert();
+            }
+            summary.setValue('employee_num', employeeNum);
+            summary.update();
+        }
+    },
+
+    /**
+     * 根据调薪记录更新基本工资
+     * @param 月度ID monthId
+     * @param 员工ID empId
+     * @returns
+     */
+    updateBaseSalary: function(monthId,empId){
+        var ar = new GlideRecord('x_yunji_jet_04_adjustment_record');
+        ar.addQuery("employee",empId);
+        ar.addQuery("monthly_list",monthId);
+        ar.query();
+        if(ar.next()){
+            var bs=new GlideRecord('x_yunji_jet_04_base_salary');
+            bs.addQuery("employee",empId);
+            bs.query();
+            if(bs.next()){
+                var cols=["salary","meal_allowance","compute_allowance","phone_allowance","other_allowance"]
+                var checkAr=false,checkBs=false;
+                for (var colidx=0;colidx&lt;cols.length;colidx++) {
+                    var col=cols[colidx];
+                    if(ar.getValue(col)!=null&amp;&amp;ar.getValue(col)!==bs.getValue(col)){
+                        if(!ar.getValue("before_"+col)){
+                            ar.setValue("before_"+col,bs.getValue(col));
+                            checkAr=true;
+                        }
+                        bs.setValue(col,ar.getValue(col));
+                        checkBs=true;
+                    }
+                }
+                if(checkAr){
+                    ar.update();
+                }
+                if(checkBs){
+                    bs.update();
+                }
+            }
+        }
+        
+        var ssr = new GlideRecord('x_yunji_jet_04_social_security_adjustment');
+        ssr.addQuery("employee",empId);
+        ssr.addQuery("monthly_list",monthId);
+
+        ssr.query();
+        if(ssr.next()){
+            var ss=new GlideRecord('x_yunji_jet_04_social_security');
+            ss.addQuery("employee",empId);
+            ss.query();
+            if(ss.next()){
+                var cols=["social_security","housing_provident_fund"]
+                var checkSsr=false,checkSs=false;
+                for (var colidx=0;colidx&lt;cols.length;colidx++) {
+                    var col=cols[colidx];
+                    if(ssr.getValue(col)!=null&amp;&amp;ssr.getValue(col)!==ss.getValue(col)){
+                        if(!ssr.getValue("before_"+col)){
+                            ssr.setValue("before_"+col,ss.getValue(col));
+                            checkSsr=true;
+                        }
+                        ss.setValue(col,ss.getValue(col));
+                        checkSs=true;
+                    }
+                }
+                cols=["endowment_insurance", "medical_insurance", "unemployment_insurance", "maternity_insurance", "employment_injury_insurance", "serious_illness_insurance", "housing_provident_fund"];
+                for (var colidx=0;colidx&lt;cols.length;colidx++) {
+                    var col=cols[colidx]+"_paid";
+                    if(ssr.getValue(col)!=null&amp;&amp;ssr.getValue(col)!==ss.getValue(col)){
+                        ss.setValue(col,ssr.getValue(col));
+                        checkSs=true;
+                    }
+                }
+                if(checkSsr){
+                    ssr.update();
+                }
+                if(checkSs){
+                    ss.update();
+                }
+            }
+        }
+    },
+
+    /**
+     * 事假、普通缺勤、入离职缺勤扣款
+     * @param {基础工资} basicSalary
+     * @param {计薪天数} payableDays
+     * @param {天数} days
+     * @returns
+     */
+    absenceDebit: function (basicSalary, payableDays, days) {
+        if (days == null || days == 0) {
+            return 0;
+        }
+        if (basicSalary == null || basicSalary == 0 || payableDays == null || payableDays == 0) {
+            return 0;
+        }
+        return this.parseFixed(basicSalary / payableDays * days);
+    },
+
+    /**
+     * 病假扣款
+     * @param {基础工资} basicSalary
+     * @param {计薪天数} payableDays
+     * @param {天数} days
+     * @returns
+     */
+    sickLeaveDebit: function (basicSalary, payableDays, days) {
+        if (days == null || days == 0) {
+            return 0;
+        }
+        if (basicSalary == null || basicSalary == 0 || payableDays == null || payableDays == 0) {
+            return 0;
+        }
+        return this.parseFixed(basicSalary / payableDays * days * 0.5);
+    },
+
+    /**
+     * 餐补扣款
+     * @param {餐补} mealAllowance
+     * @param {计薪天数} payableDays
+     * @param {天数} days
+     * @returns
+     */
+    mealAllowanceDebit: function (mealAllowance, payableDays, days) {
+        if (days == null || days == 0) {
+            return 0;
+        }
+        if (mealAllowance == null || mealAllowance == 0 || payableDays == null || payableDays == 0) {
+            return 0;
+        }
+        return this.parseFixed(mealAllowance / payableDays * days);
+    },
+
+    /**
+     * 迟到扣款
+     * @param {迟到天数} days
+     * @returns
+     */
+    lateDebit: function (days) {
+        if (days == null || days == 0) {
+            return 0;
+        }
+        return this.parseFixed(days * 100);
+    },
+
+    parseFixed: function (num) {
+        return parseFloat(num).toFixed(2);
+    },
+
+    type: 'AttendanceAmountCalculation'
+};</script>
+    <sys_class_name>sys_script_include</sys_class_name>
+    <sys_created_by>xuqingqing</sys_created_by>
+    <sys_created_on>2022-04-27 16:57:53</sys_created_on>
+    <sys_effective/>
+    <sys_id>84a1471207594147905500491b40d494</sys_id>
+    <sys_mod_count>1</sys_mod_count>
+    <sys_name/>
+    <sys_package/>
+    <sys_policy/>
+    <sys_scope>0a73f96002524301a75a553e883ef21b</sys_scope>
+    <sys_update_name/>
+    <sys_updated_by>xuqingqing</sys_updated_by>
+    <sys_updated_on>2022-05-12 14:23:59</sys_updated_on>
+  </sys_script_include>
+</record_update>
