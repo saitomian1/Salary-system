@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<record_update table="sys_script_include">
+  <sys_script_include action="INSERT_OR_UPDATE">
+    <access/>
+    <active>true</active>
+    <api_name>TaxInfo</api_name>
+    <caller_access/>
+    <client_callable>true</client_callable>
+    <description>查询适用的个税标准</description>
+    <name>TaxInfo</name>
+    <script>var TaxInfo = Class.create();
+TaxInfo.prototype = {
+    initialize: function() {
+    },
+    queryTax: function (totalSalary) {
+      	var taxDate = {};
+      if (totalSalary &lt;= 0) {
+        taxDate.tax_rate=0;
+         taxDate.base_tax=0;
+        return taxDate;
+      }
+        var taxConfig = new GlideRecord('x_yunji_jet_04_i_tax_config');
+        taxConfig.addQuery('range_from', '&lt;',totalSalary);
+        taxConfig.query();
+        if (taxConfig.getRowCount() ==7) {
+          while(taxConfig.hasNext()){
+            taxConfig.next()
+            taxDate.tax_rate=taxConfig.getValue('tax_rate');
+          	taxDate.base_tax=taxConfig.getValue('base_tax');
+        }
+        } else {
+          taxConfig.addQuery('range_from', '&lt;',totalSalary);
+          taxConfig.addQuery('range_to', '&gt;=',totalSalary);
+          taxConfig.query();
+          while(taxConfig.hasNext()){
+            taxConfig.next()
+            taxDate.tax_rate=taxConfig.getValue('tax_rate');
+          taxDate.base_tax=taxConfig.getValue('base_tax');
+        }
+        }
+      return taxDate;
+    },
+    type: 'TaxInfo'
+};</script>
+    <sys_class_name>sys_script_include</sys_class_name>
+    <sys_created_by>wangrui</sys_created_by>
+    <sys_created_on>2022-04-27 16:22:31</sys_created_on>
+    <sys_effective/>
+    <sys_id>05c138c3ed6b4e79a7dd293ac33ae94f</sys_id>
+    <sys_mod_count>1</sys_mod_count>
+    <sys_name/>
+    <sys_package/>
+    <sys_policy/>
+    <sys_scope>0a73f96002524301a75a553e883ef21b</sys_scope>
+    <sys_update_name/>
+    <sys_updated_by>wangrui</sys_updated_by>
+    <sys_updated_on>2022-04-27 17:14:31</sys_updated_on>
+  </sys_script_include>
+</record_update>

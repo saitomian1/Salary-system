@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<record_update table="sys_ui_policy_action">
+  <sys_ui_policy_action action="INSERT_OR_UPDATE">
+    <cleared>false</cleared>
+    <disabled>false</disabled>
+    <field>bonus_desc</field>
+    <mandatory>true</mandatory>
+    <sys_class_name>sys_ui_policy_action</sys_class_name>
+    <sys_created_by>admin</sys_created_by>
+    <sys_created_on>2022-06-09 10:22:11</sys_created_on>
+    <sys_effective/>
+    <sys_id>72b909edd07546079977612baa17d65e</sys_id>
+    <sys_mod_count>1</sys_mod_count>
+    <sys_name/>
+    <sys_package/>
+    <sys_policy/>
+    <sys_scope>0a73f96002524301a75a553e883ef21b</sys_scope>
+    <sys_update_name/>
+    <sys_updated_by>admin</sys_updated_by>
+    <sys_updated_on>2022-06-10 10:34:48</sys_updated_on>
+    <table>x_yunji_jet_04_bonus_record</table>
+    <ui_policy>da739e12aa5c457d958b6b9b691d1419</ui_policy>
+    <visible>ignore</visible>
+  </sys_ui_policy_action>
+</record_update>
