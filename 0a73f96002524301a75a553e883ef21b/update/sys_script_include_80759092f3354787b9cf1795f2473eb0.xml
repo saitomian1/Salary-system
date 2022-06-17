@@ -1,0 +1,216 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<record_update table="sys_script_include">
+  <sys_script_include action="INSERT_OR_UPDATE">
+    <access/>
+    <active>true</active>
+    <api_name>updateTaxInfo</api_name>
+    <caller_access/>
+    <client_callable>false</client_callable>
+    <description>更新个人当月应缴个税</description>
+    <name>updateTaxInfo</name>
+    <script>var updateTaxInfo = Class.create();
+updateTaxInfo.prototype = {
+    initialize: function () {
+    },
+    updateTax: function (sys_id) {
+        var month;
+        var company
+        var monthListId
+        //月度工资表
+        var monthlySummary = new GlideRecord('x_yunji_jet_04_monthly_payroll_summary');
+        monthlySummary.addQuery('sys_id', '=', sys_id);
+        monthlySummary.query();
+        if (monthlySummary.hasNext()) {
+            monthlySummary.next();
+            monthListId = monthlySummary.getValue('monthly_list');
+            //公司月度信息表
+            var monthList = new GlideRecord('x_yunji_jet_04_monthly_list');
+            monthList.addQuery('sys_id', '=', monthListId);
+            monthList.query();
+            if (monthList.hasNext()) {
+                monthList.next();
+                month = monthList.getValue('month');
+                company = monthList.getValue('company');
+            }
+        }
+        gs.print(month+','+company);
+        var monthIds = this.queryMonthIDs(month,company);
+        monthIds.add(sys_id)
+        var monthListIds = com.google.common.collect.Lists.newArrayList();;
+        for (i in monthIds) {
+            gs.print(monthIds[i]);
+            var monthlySummary2 = new GlideRecord('x_yunji_jet_04_monthly_payroll_summary');
+            monthlySummary2.addQuery('sys_id', '=', monthIds[i]);
+            monthlySummary2.query();
+            if (monthlySummary2.hasNext()) {
+                monthlySummary2.next();
+                monthListIds.add(monthlySummary2.getValue('monthly_list'))
+            }
+        }
+        //个人月工资表
+        var personal = new GlideRecord('x_yunji_jet_04_personal_monthly_payroll');
+        personal.addQuery('monthly_payroll_summary', '=', sys_id);
+        personal.query();
+        while (personal.hasNext()) {
+            personal.next();
+            this.updateTaxPerson(personal.getValue('employee'), monthIds, monthListIds,sys_id);
+        }
+    },
+    updateTaxPerson: function (employee, monthIds, monthListIds,sys_id) {
+        var taxInfo = new TaxInfo();
+        //个人养老保险金额
+        var sumEndowmentInsurance = 0;
+        //个人医疗保险金额
+        var sumMedicalInsurance = 0;
+        //个人失业保险金额
+        var sumUnemploymentInsurance = 0;
+        //个人生育保险金额
+        var sumMaternityInsurance = 0;
+        //个人工伤保险金额
+        var sumEmploymentInjuryInsurance = 0;
+        //个人大病保险
+        var sumSeriousIllnessInsurance = 0;
+        //个人住房公积金
+        var sumHousingProvident_fund = 0;
+        //应发工资
+        var sumTotalSalary = 0;
+        //个税金额
+        var sumIndividualIncomeTax = 0;
+        //通讯费
+        var sumphoneAllowance=0;
+        //专项附加扣除
+        var sumDeductions = 0;
+        //缴纳月份数量
+        var monthNum = 0;
+        gs.print(monthIds.size());
+        gs.print(monthListIds.size());
+        for (i in monthIds) {
+            var personal = new GlideRecord('x_yunji_jet_04_personal_monthly_payroll');
+            personal.addQuery('employee', '=', employee);
+            personal.addQuery('monthly_payroll_summary', '=', monthIds[i]);
+            personal.query();
+            while (personal.hasNext()) {
+                personal.next();
+                sumEndowmentInsurance = sumEndowmentInsurance + this.parseNum(personal.getValue('endowment_insurance'));
+                sumMedicalInsurance = sumMedicalInsurance + this.parseNum(personal.getValue('medical_insurance'));
+                sumUnemploymentInsurance = sumUnemploymentInsurance + this.parseNum(personal.getValue('unemployment_insurance'));
+                sumMaternityInsurance = sumMaternityInsurance + this.parseNum(personal.getValue('maternity_insurance'));
+                sumEmploymentInjuryInsurance = sumEmploymentInjuryInsurance + this.parseNum(personal.getValue('employment_injury_insurance'));
+                sumSeriousIllnessInsurance = sumSeriousIllnessInsurance + this.parseNum(personal.getValue('serious_illness_insurance'));
+                sumHousingProvident_fund = sumHousingProvident_fund + this.parseNum(personal.getValue('housing_provident_fund'));
+                sumTotalSalary = sumTotalSalary + this.parseNum(personal.getValue('total_salary'));
+                sumIndividualIncomeTax = sumIndividualIncomeTax + this.parseNum(personal.getValue('individual_income_tax'));
+                sumphoneAllowance=sumphoneAllowance+ this.parseNum(personal.getValue('phone_allowance'));
+                monthNum = monthNum +1;
+            }
+        }
+
+        for (i in monthListIds) {
+            var taxDe = new GlideRecord('x_yunji_jet_04_i_tax_deduction');
+            taxDe.addQuery('employee', '=', employee);
+            taxDe.addQuery('monthly_list', '=', monthListIds[i]);
+            taxDe.query();
+            if (taxDe.hasNext()) {
+                taxDe.next();
+                sumDeductions = sumDeductions + this.parseNum(taxDe.getValue('deductions'));
+            }
+        }
+        var personal = new GlideRecord('x_yunji_jet_04_personal_monthly_payroll');
+        personal.addQuery('employee', '=', employee);
+        personal.addQuery('monthly_payroll_summary', '=', sys_id);
+        personal.query();
+        if (personal.hasNext()) {
+            personal.next();
+        }
+        //累计税前小计
+        var taxBefore = (sumTotalSalary - sumEndowmentInsurance - sumMedicalInsurance - sumUnemploymentInsurance - sumMaternityInsurance - sumEmploymentInjuryInsurance
+        - sumSeriousIllnessInsurance - sumHousingProvident_fund - sumDeductions-sumphoneAllowance).toFixed(2);
+        //累计应纳税所得额
+        var taxBeforeTotal = taxBefore - 5000 * (monthNum);
+        var tax = 0;
+        gs.print('累计通讯费'+sumphoneAllowance);
+        gs.print('累计应发工资'+sumTotalSalary);
+        gs.print('累计个人养老保险金额'+sumEndowmentInsurance);
+        gs.print('累计个人医疗保险金额'+sumMedicalInsurance);
+        gs.print('累计个人失业保险金额'+sumUnemploymentInsurance);
+        gs.print('累计个人生育保险金额'+sumMaternityInsurance);
+        gs.print('累计个人工伤保险金额'+sumEmploymentInjuryInsurance);
+        gs.print('累计个人大病保险'+sumSeriousIllnessInsurance);
+        gs.print('累计公积金'+sumHousingProvident_fund);
+        gs.print('累计专项扣除'+sumDeductions);
+        gs.print('累计税前小计'+taxBefore);
+        gs.print('累计应纳税所得额'+taxBeforeTotal);
+        if (taxBeforeTotal &lt; 0) {
+            personal.setValue('individual_income_tax', 0);
+        } else {
+            taxDate = taxInfo.queryTax(taxBeforeTotal);
+            //累计应交个税
+            var taxTotal = taxBeforeTotal * (this.parseNum(taxDate.tax_rate) / 100) - this.parseNum(taxDate.base_tax);
+            taxTotal = taxTotal.toFixed(2)
+            gs.print('累计应交个税'+taxTotal);
+            gs.print('累计已交个税'+sumIndividualIncomeTax);
+            //当月应缴个税
+            tax = (taxTotal - sumIndividualIncomeTax).toFixed(2);
+            if (tax &lt; 0) {
+                personal.setValue('individual_income_tax', 0);
+              	tax=0;
+            } else {
+                personal.setValue('individual_income_tax', tax);
+            }
+        }
+        var net_salary = 0;
+        gs.print('个税'+tax);
+        net_salary = this.parseNum(personal.getValue('total_salary')) - this.parseNum(personal.getValue('endowment_insurance')) - this.parseNum(personal.getValue('medical_insurance')) - this.parseNum(personal.getValue('unemployment_insurance')) - personal.getValue('maternity_insurance') - this.parseNum(personal.getValue('employment_injury_insurance')) - this.parseNum(personal.getValue('serious_illness_insurance')) - this.parseNum(personal.getValue('housing_provident_fund')) - tax;
+        net_salary = net_salary.toFixed(2);
+        if (net_salary &lt; 0) {
+            net_salary = 0;
+        }
+        personal.setValue('net_salary', net_salary);
+        personal.update();
+    },
+
+    queryMonthIDs: function (month,company) {
+        var monthIds = com.google.common.collect.Lists.newArrayList();
+        var monthlyList = new GlideRecord('x_yunji_jet_04_monthly_list');
+        monthlyList.addQuery('month', 'STARTSWITH', month.substring(0, 4));
+        monthlyList.addQuery('month', '&lt;=', month);
+        monthlyList.addQuery('company', '=', company);
+        monthlyList.query();
+        while (monthlyList.hasNext()) {
+            monthlyList.next();
+            var monthlySummary = new GlideRecord('x_yunji_jet_04_monthly_payroll_summary');
+            monthlySummary.addQuery('monthly_list', '=', monthlyList.getValue('sys_id'));
+            monthlySummary.addQuery('status', '=', 'success');
+            monthlySummary.query();
+            if (monthlySummary.hasNext()) {
+                monthlySummary.next();
+                monthIds.add(monthlySummary.getValue('sys_id'));
+            }
+        }
+        return monthIds;
+    },
+
+    parseNum: function (num) {
+        if (num == null || num == 0) {
+            return 0;
+        }
+        return parseFloat(num);
+    },
+
+    type: 'updateTaxInfo'
+};</script>
+    <sys_class_name>sys_script_include</sys_class_name>
+    <sys_created_by>wangrui</sys_created_by>
+    <sys_created_on>2022-04-27 19:09:40</sys_created_on>
+    <sys_effective/>
+    <sys_id>80759092f3354787b9cf1795f2473eb0</sys_id>
+    <sys_mod_count>1</sys_mod_count>
+    <sys_name/>
+    <sys_package/>
+    <sys_policy/>
+    <sys_scope>0a73f96002524301a75a553e883ef21b</sys_scope>
+    <sys_update_name/>
+    <sys_updated_by>wangrui</sys_updated_by>
+    <sys_updated_on>2022-05-12 14:09:05</sys_updated_on>
+  </sys_script_include>
+</record_update>
